@@ -1,18 +1,25 @@
 import hashlib
 import time
+from collections import Counter
 
+# -------------------------------
+# Block Class
+# -------------------------------
 class Block:
     def __init__(self, index, previous_hash, timestamp, data):
         self.index = index
         self.previous_hash = previous_hash
         self.timestamp = timestamp
-        self.data = data  # vote data
+        self.data = data
         self.hash = self.calculate_hash()
 
     def calculate_hash(self):
         block_string = str(self.index) + str(self.previous_hash) + str(self.timestamp) + str(self.data)
         return hashlib.sha256(block_string.encode()).hexdigest()
 
+# -------------------------------
+# Blockchain Class
+# -------------------------------
 class Blockchain:
     def __init__(self):
         self.chain = [self.create_genesis_block()]
@@ -32,7 +39,6 @@ class Blockchain:
         for i in range(1, len(self.chain)):
             current = self.chain[i]
             previous = self.chain[i - 1]
-
             if current.hash != current.calculate_hash():
                 return False
             if current.previous_hash != previous.hash:
@@ -40,16 +46,90 @@ class Blockchain:
         return True
 
 # -------------------------------
-# Example Usage: Voting System
+# Register Candidates
+# -------------------------------
+candidates = []
+num_candidates = int(input("Enter number of candidates participating: "))
+
+for i in range(num_candidates):
+    name = input(f"Enter name of candidate {i+1} : ").strip()
+    if name.lower() == "stop":
+        print("Voting setup stopped immediately.")
+        exit()
+    candidates.append(name)
+
+# Display candidates with numbers
+print("\n--- Candidates Participating ---")
+for idx, c in enumerate(candidates, start=1):
+    print(f"{idx}. {c}")
+print("-------------------------------\n")
+
+# -------------------------------
+# Voting System with Real-Time Count
 # -------------------------------
 votes = Blockchain()
+total_votes = int(input("Enter number of votes to cast: "))
+votes_cast = 0  # counts successful votes
 
-# Casting votes (in reality, this would be encrypted & verified with digital ID)
-votes.add_block("VoterID:101 → Candidate:A")
-votes.add_block("VoterID:102 → Candidate:B")
-votes.add_block("VoterID:103 → Candidate:A")
+while votes_cast < total_votes:
+    voter_id = input(f"\nEnter VoterID for vote {votes_cast+1} : ").strip()
+    if voter_id.lower() == "stop":
+        print("Voting stopped immediately.")
+        break
 
-# Display blockchain (vote records)
+    # Display numbered candidates
+    print("Candidates:")
+    for idx, c in enumerate(candidates, start=1):
+        print(f"{idx}. {c}")
+
+    candidate_number = input(f"Enter the number of the candidate you vote for : ").strip()
+    if candidate_number.lower() == "stop":
+        print("Voting stopped immediately.")
+        break
+
+    # Validate candidate number
+    if not candidate_number.isdigit() or int(candidate_number) < 1 or int(candidate_number) > len(candidates):
+        print("Error: Invalid candidate number! Vote not recorded.\n")
+        continue
+
+    candidate_index = int(candidate_number) - 1
+    candidate_name = candidates[candidate_index]
+
+    # Check for duplicate VoterID
+    existing_voter_ids = [block.data.split(" → ")[0].split(":")[1] for block in votes.chain[1:]]
+    if voter_id in existing_voter_ids:
+        print(f"Error: VoterID {voter_id} has already voted! Vote not recorded.\n")
+        continue  # do not increment votes_cast so next person can vote
+
+    # Add vote to blockchain
+    vote_data = f"VoterID:{voter_id} → Candidate:{candidate_name}"
+    votes.add_block(vote_data)
+    votes_cast += 1  # count only valid votes
+
+    # -------------------------------
+    # Real-Time Vote Count & Current Leader
+    # -------------------------------
+    vote_counts = Counter()
+    for block in votes.chain[1:]:
+        name = block.data.split(" → ")[1].split(":")[1]
+        vote_counts[name] += 1
+
+    print("\nCurrent Vote Count:")
+    for c, count in vote_counts.items():
+        print(f"{c}: {count} vote(s)")
+
+    # Determine current leader
+    max_votes = max(vote_counts.values())
+    leaders = [c for c, v in vote_counts.items() if v == max_votes]
+    if len(leaders) == 1:
+        print(f"Current Leader: {leaders[0]}")
+    else:
+        print(f"Tie between: {', '.join(leaders)}")
+
+# -------------------------------
+# Display Blockchain Records
+# -------------------------------
+print("\n--- Final Blockchain Records ---\n")
 for block in votes.chain:
     print(f"Index: {block.index}")
     print(f"Data: {block.data}")
@@ -57,3 +137,21 @@ for block in votes.chain:
     print(f"Previous Hash: {block.previous_hash}\n")
 
 print("Is blockchain valid?", votes.is_chain_valid())
+
+# -------------------------------
+# Final Vote Count & Winner
+# -------------------------------
+print("\n--- Final Vote Count ---")
+for candidate, count in vote_counts.items():
+    print(f"{candidate}: {count} vote(s)")
+
+max_votes = max(vote_counts.values(), default=0)
+winners = [c for c, v in vote_counts.items() if v == max_votes]
+
+print("\n--- Winner ---")
+if max_votes == 0:
+    print("No votes were cast.")
+elif len(winners) == 1:
+    print(f"{winners[0]} won with {max_votes} vote(s)!")
+else:
+    print(f"Tie between: {', '.join(winners)} with {max_votes} vote(s) each!")
